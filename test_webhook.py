@@ -5,21 +5,24 @@ import requests
 import json
 import sys
 
-def test_webhook(url="http://localhost:5000/webhook", password="your_secret_password_here"):
+def test_webhook(url="http://localhost:5000/webhook", password="your_secret_password_here", instance_id="i-0123456789abcdef0"):
     """
     Send a test webhook request.
     
     Args:
         url (str): The webhook endpoint URL
         password (str): The password to send
+        instance_id (str): The EC2 instance ID to reboot
     """
     print(f"Sending webhook request to: {url}")
     print(f"Password: {password}")
+    print(f"Instance ID: {instance_id}")
     print("-" * 50)
     
     try:
         payload = {
-            "password": password
+            "password": password,
+            "instance_id": instance_id
         }
         response = requests.post(
             url,
@@ -68,10 +71,14 @@ if __name__ == "__main__":
     webhook_url = "http://localhost:5000/webhook"
     health_url = "http://localhost:5000/health"
     password = "thisisthewebhookforbws10909"
+    instance_id = "i-0123456789abcdef0"
+    
     if len(sys.argv) > 1:
         password = sys.argv[1]
     if len(sys.argv) > 2:
-        webhook_url = sys.argv[2]
+        instance_id = sys.argv[2]
+    if len(sys.argv) > 3:
+        webhook_url = sys.argv[3]
         health_url = webhook_url.replace("/webhook", "/health")
     
     print("=" * 50)
@@ -81,7 +88,7 @@ if __name__ == "__main__":
     
     if health_ok:
         print("\n✓ Health check passed!")
-        webhook_ok = test_webhook(webhook_url, password)
+        webhook_ok = test_webhook(webhook_url, password, instance_id)
         
         if webhook_ok:
             print("\n✓ Webhook test passed!")

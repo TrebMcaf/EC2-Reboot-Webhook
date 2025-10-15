@@ -1,11 +1,12 @@
 # EC2 Auto Restart Webhook
 
-A Python Flask application that receives webhook messages and automatically restarts an EC2 instance when the correct password/keyword is provided.
+A Python Flask application that receives webhook messages and automatically restarts an EC2 instance when the correct password/keyword and instance ID are provided.
 
 ## Features
 
 - 🔐 Password-protected webhook endpoint
-- ☁️ AWS EC2 instance restart functionality
+- ☁️ Dynamic EC2 instance restart functionality (specify instance ID per request)
+- 🌍 Support for multiple AWS regions
 - 📝 Comprehensive logging
 - 🏥 Health check endpoint
 - ⚙️ Environment-based configuration
@@ -32,9 +33,10 @@ cp .env.example .env
 
 4. Edit `.env` and configure your settings:
    - `WEBHOOK_PASSWORD`: The secret password/keyword to trigger the restart
-   - `EC2_INSTANCE_ID`: Your EC2 instance ID (e.g., i-0123456789abcdef0)
-   - `AWS_REGION`: AWS region where your instance is located
+   - `AWS_REGION`: Default AWS region (can be overridden in webhook request)
    - AWS credentials (if not using IAM role)
+
+**Note:** The EC2 instance ID is now provided in each webhook request payload, allowing you to reboot different instances dynamically.
 
 ## AWS Credentials Setup
 
@@ -81,11 +83,25 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 
 The webhook endpoint accepts POST requests at `/webhook`.
 
+**Required fields:**
+- `password`: Your webhook password
+- `instance_id`: The EC2 instance ID to reboot (e.g., i-0123456789abcdef0)
+
+**Optional fields:**
+- `region`: AWS region (defaults to `AWS_REGION` from .env if not provided)
+
 #### Example using curl:
 ```bash
 curl -X POST http://localhost:5000/webhook \
   -H "Content-Type: application/json" \
-  -d '{"password": "your_secret_password_here"}'
+  -d '{"password": "your_secret_password_here", "instance_id": "i-0123456789abcdef0"}'
+```
+
+#### Example with custom region:
+```bash
+curl -X POST http://localhost:5000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"password": "your_secret_password_here", "instance_id": "i-0123456789abcdef0", "region": "us-west-2"}'
 ```
 
 #### Example using Python:
@@ -94,7 +110,10 @@ import requests
 
 response = requests.post(
     'http://localhost:5000/webhook',
-    json={'password': 'your_secret_password_here'}
+    json={
+        'password': 'your_secret_password_here',
+        'instance_id': 'i-0123456789abcdef0'
+    }
 )
 print(response.json())
 ```
@@ -103,6 +122,7 @@ print(response.json())
 ```powershell
 $body = @{
     password = "your_secret_password_here"
+    instance_id = "i-0123456789abcdef0"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:5000/webhook" -Method Post -Body $body -ContentType "application/json"
@@ -138,6 +158,14 @@ The application looks for the password in the following JSON fields:
 {
     "status": "error",
     "message": "Invalid password"
+}
+```
+
+#### Missing Instance ID:
+```json
+{
+    "status": "error",
+    "message": "instance_id is required in the request body"
 }
 ```
 
@@ -196,6 +224,26 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
+## Testing
+
+A test script is included to verify the webhook functionality:
+
+```bash
+# Basic test with default values
+python test_webhook.py
+
+# Test with custom password and instance ID
+python test_webhook.py "your_password" "i-0123456789abcdef0"
+
+# Test with custom password, instance ID, and URL
+python test_webhook.py "your_password" "i-0123456789abcdef0" "http://your-server:5000/webhook"
+```
+
+The test script will:
+1. Check the health endpoint
+2. Send a webhook request with the specified password and instance ID
+3. Display the response
+
 ## Logging
 
 The application logs all important events including:
@@ -208,14 +256,17 @@ Logs are printed to stdout/stderr and can be redirected to a file if needed.
 
 ## Troubleshooting
 
-### "EC2_INSTANCE_ID must be set" error
-Make sure you've created a `.env` file and set the `EC2_INSTANCE_ID` variable.
+### "instance_id is required in the request body" error
+Make sure you're including the `instance_id` field in your webhook request JSON payload.
 
 ### AWS Authentication Errors
 Verify your AWS credentials are correctly configured and have the necessary permissions.
 
 ### Instance Not Rebooting
-Check the application logs for error messages. Ensure the instance ID is correct and the instance exists in the specified region.
+Check the application logs for error messages. Ensure:
+- The instance ID in your request is correct and exists
+- The instance is in the correct region (either specified in the request or matching your `AWS_REGION` env variable)
+- Your AWS credentials have permission to reboot the specified instance
 
 ## License
 

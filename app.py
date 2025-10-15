@@ -14,12 +14,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 WEBHOOK_PASSWORD = os.getenv('WEBHOOK_PASSWORD', 'default_secret_password')
-EC2_INSTANCE_ID = os.getenv('EC2_INSTANCE_ID')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
-
-if not EC2_INSTANCE_ID:
-    logger.error("EC2_INSTANCE_ID is not set in environment variables!")
-    raise ValueError("EC2_INSTANCE_ID must be set")
 
 def restart_ec2_instance(instance_id, region):
     """
@@ -82,12 +77,22 @@ def webhook_handler():
                 'message': 'Invalid password'
             }), 401
         logger.info("Password verified successfully")
-        result = restart_ec2_instance(EC2_INSTANCE_ID, AWS_REGION)
+
+        instance_id = data.get('instance_id')
+        if not instance_id:
+            logger.error("instance_id not provided in request")
+            return jsonify({
+                'status': 'error',
+                'message': 'instance_id is required in the request body'
+            }), 400
+        region = data.get('region', AWS_REGION)
+        
+        result = restart_ec2_instance(instance_id, region)
         if result['success']:
             return jsonify({
                 'status': 'success',
                 'message': result['message'],
-                'instance_id': EC2_INSTANCE_ID
+                'instance_id': instance_id
             }), 200
         else:
             return jsonify({
@@ -118,7 +123,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     logger.info(f"Starting webhook server on port {port}")
-    logger.info(f"Monitoring EC2 instance: {EC2_INSTANCE_ID}")
-    logger.info(f"AWS Region: {AWS_REGION}")
+    logger.info(f"Default AWS Region: {AWS_REGION}")
+    logger.info("Instance ID will be provided in webhook payload")
     app.run(host='0.0.0.0', port=port, debug=debug)
 
